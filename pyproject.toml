@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=80.10.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seed"
+version = "0.1.0"
+description = "Semantic Evaluation Dataset"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Eva", email = "eva.evangelisti03@gmail.com" }]
+dependencies = [
+  "typer>=0.21.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=26.1.0",
+    "isort>=7.0.0",
+]
+
+[project.scripts]
+seed = "seed.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"

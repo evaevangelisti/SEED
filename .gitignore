@@ -1,0 +1,12 @@
+# Python version files
+.python-version
+
+# Virtual environments
+.venv/
+
+# Packaging artifacts
+build/
+*.egg-info/
+
+# Python cache files
+__pycache__/
