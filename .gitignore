@@ -10,3 +10,6 @@ build/
 
 # Python cache files
 __pycache__/
+
+# Data files
+data/
