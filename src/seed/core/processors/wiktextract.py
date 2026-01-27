@@ -9,6 +9,7 @@ from typing import Any, Generator
 import torch
 from sentence_transformers import SentenceTransformer, util
 from tqdm import tqdm
+from transformers import logging
 
 from ...config import (
     DEFAULT_DEVICE,
@@ -19,6 +20,8 @@ from ...config import (
 )
 from ...models import Lemma, Sense, Translation
 from .base import Processor
+
+logging.set_verbosity_error()
 
 
 class WiktextractProcessor(Processor):
@@ -122,40 +125,43 @@ class WiktextractProcessor(Processor):
     def _extract_senses(
         self,
         raw_senses: list[dict[str, Any]],
-    ) -> list[Sense]:
+        sense_index: int = 1,
+    ) -> tuple[int, list[Sense]]:
         """
         Extract senses from a Wiktextract entry.
 
         Args:
             raw_senses (list[dict[str, Any]]): List of raw senses.
+            sense_index (int): Starting index for senses.
 
         Returns:
-            list[Sense]: List of extracted senses.
+            tuple[int, list[Sense]]: Updated sense index and list of Sense objects.
         """
         senses: list[Sense] = []
 
-        for i, sense in enumerate(raw_senses):
+        for sense in raw_senses:
             glosses: list[str] = sense.get("glosses", [])
-            if not glosses:
-                continue
 
-            definition: str = glosses[0].strip()
-            if not definition:
-                continue
+            if glosses:
+                definition: str = glosses[0].strip()
 
-            sentences: list[str] = self._extract_sentences(sense.get("examples", []))
-            if not sentences:
-                continue
+                if definition:
+                    sentences: list[str] = self._extract_sentences(
+                        sense.get("examples", []),
+                    )
 
-            senses.append(
-                Sense(
-                    sense_order=i,
-                    definition=definition,
-                    sentences=sentences,
-                )
-            )
+                    if sentences:
+                        senses.append(
+                            Sense(
+                                sense_order=sense_index,
+                                definition=definition,
+                                sentences=sentences,
+                            )
+                        )
 
-        return senses
+            sense_index += 1
+
+        return sense_index - 1, senses
 
     def _extract_translations(
         self,
@@ -275,7 +281,7 @@ class WiktextractProcessor(Processor):
         Returns:
             Generator[Lemma, None, None]: Generator of Lemma objects.
         """
-        lemmas: dict[str, list[Sense]] = {}
+        lemmas: dict[str, dict[str, Any]] = {}
 
         with (
             gzip.open(self._input_path, "rt", encoding="utf-8") as file,
@@ -288,11 +294,21 @@ class WiktextractProcessor(Processor):
                 entry: dict[str, Any] = json.loads(line)
 
                 language: str | None = entry.get("lang_code") or entry.get("lang")
+
                 if language and language.lower() in ("en", "english"):
                     lemma: str | None = entry.get("word")
+
                     if lemma:
-                        senses: list[Sense] = self._extract_senses(
-                            entry.get("senses", []),
+                        lemma = lemma.strip().lower()
+
+                        lemmas.setdefault(lemma, {"last_sense_index": 0, "senses": []})
+
+                        senses: list[Sense]
+                        lemmas[lemma]["last_sense_index"], senses = (
+                            self._extract_senses(
+                                entry.get("senses", []),
+                                sense_index=lemmas[lemma]["last_sense_index"] + 1,
+                            )
                         )
 
                         if senses:
@@ -303,9 +319,9 @@ class WiktextractProcessor(Processor):
                                 ),
                             )
 
-                            lemmas.setdefault(lemma.strip().lower(), []).extend(senses)
+                            lemmas[lemma]["senses"].extend(senses)
 
                 pbar.update(1)
 
-        for lemma, senses in lemmas.items():
-            yield Lemma(lemma=lemma, senses=senses)
+        for lemma, data in lemmas.items():
+            yield Lemma(lemma=lemma, senses=data["senses"])

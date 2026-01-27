@@ -37,7 +37,7 @@ class JsonlExporter(Exporter):
             encoding="utf-8",
             buffering=buffer_size,
         ) as file:
-            for lemma in tqdm(lemmas, desc="Exporting", unit="lemma"):
+            for lemma in tqdm(lemmas, desc="Exporting", unit=" lemma"):
                 file.write(f"{json.dumps(asdict(lemma), ensure_ascii=False)}\n")
 
         return self._output_path

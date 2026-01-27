@@ -59,6 +59,10 @@ def main(
         help="Buffer size in bytes",
     ),
 ) -> None:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
     from .core import Downloader
 
     downloader: Downloader = Downloader(
@@ -89,9 +93,12 @@ def main(
     )
 
     exporter: Exporter
-
     exporter, output_path = ExporterFactory.create(output_path)
-    exporter.export(processor.process(), buffer_size=buffer_size)
+
+    exporter.export(
+        processor.process(),
+        buffer_size=buffer_size,
+    )
 
     typer.echo(f"Saved processed data to {output_path}")
 
