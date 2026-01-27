@@ -4,6 +4,9 @@
 # Virtual environments
 .venv/
 
+# Environment variables
+.env
+
 # Packaging artifacts
 build/
 *.egg-info/
@@ -11,5 +14,11 @@ build/
 # Python cache files
 __pycache__/
 
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
 # Data files
 data/
+
+# Documentation build files
+docs/build/
