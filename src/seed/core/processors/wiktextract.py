@@ -281,7 +281,8 @@ class WiktextractProcessor(Processor):
         Returns:
             Generator[Lemma, None, None]: Generator of Lemma objects.
         """
-        lemmas: dict[str, dict[str, Any]] = {}
+        lemmas: dict[str, list[Sense]] = {}
+        lemma_indexes: dict[str, int] = {}
 
         with (
             gzip.open(self._input_path, "rt", encoding="utf-8") as file,
@@ -301,14 +302,12 @@ class WiktextractProcessor(Processor):
                     if lemma:
                         lemma = lemma.strip().lower()
 
-                        lemmas.setdefault(lemma, {"last_sense_index": 0, "senses": []})
+                        lemma_indexes.setdefault(lemma, 0)
 
                         senses: list[Sense]
-                        lemmas[lemma]["last_sense_index"], senses = (
-                            self._extract_senses(
-                                entry.get("senses", []),
-                                sense_index=lemmas[lemma]["last_sense_index"] + 1,
-                            )
+                        lemma_indexes[lemma], senses = self._extract_senses(
+                            entry.get("senses", []),
+                            sense_index=lemma_indexes[lemma] + 1,
                         )
 
                         if senses:
@@ -319,9 +318,9 @@ class WiktextractProcessor(Processor):
                                 ),
                             )
 
-                            lemmas[lemma]["senses"].extend(senses)
+                            lemmas.setdefault(lemma, []).extend(senses)
 
                 pbar.update(1)
 
-        for lemma, data in lemmas.items():
-            yield Lemma(lemma=lemma, senses=data["senses"])
+        for lemma, senses in lemmas.items():
+            yield Lemma(lemma=lemma, senses=senses)
