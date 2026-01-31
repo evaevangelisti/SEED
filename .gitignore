@@ -1,11 +1,17 @@
+# Data files
+data/
+
+# Documentation build files
+docs/build/
+
+# Environment variables
+.env
+
 # Python version files
 .python-version
 
 # Virtual environments
 .venv/
-
-# Environment variables
-.env
 
 # Packaging artifacts
 build/
@@ -17,8 +23,5 @@ __pycache__/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
-# Data files
-data/
-
-# Documentation build files
-docs/build/
+# macOS system files
+.DS_Store
