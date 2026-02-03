@@ -22,16 +22,19 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "catppuccin>=2.5.0",
+    "catppuccin-jupyterlab>=0.2.4",
     "black>=26.1.0",
     "furo>=2025.12.19",
-    "google-genai>=1.60.0",
     "ipykernel>=7.1.0",
     "isort>=7.0.0",
+    "itables>=2.6.2",
     "jupyter>=1.1.1",
-    "matplotlib>=3.10.8",
     "nbqa>=1.9.1",
     "pandas>=2.3.3",
-    "sphinx>=8.1.3"
+    "plotly>=6.5.2",
+    "sphinx>=8.1.3",
+    "voila>=0.5.11",
 ]
 
 [project.scripts]
