@@ -6,22 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Generator
 
-import torch
-from sentence_transformers import SentenceTransformer, util
 from tqdm import tqdm
-from transformers import logging
 
-from ...config import (
-    DEFAULT_DEVICE,
-    DEFAULT_EMBEDDER,
-    DEFAULT_GAP,
-    DEFAULT_MINIMUM_YEAR,
-    DEFAULT_THRESHOLD,
-)
-from ...models import Lemma, Sense, Translation
+from ...models import Example, Quotation, Sense, Sentence, Translation
 from .base import Processor
-
-logging.set_verbosity_error()
 
 
 class WiktextractProcessor(Processor):
@@ -33,38 +21,18 @@ class WiktextractProcessor(Processor):
 
     def __init__(
         self,
-        input_path: Path,
-        minimum_year: int = DEFAULT_MINIMUM_YEAR,
+        minimum_year: int = datetime.now().year - 25,
         maximum_year: int = datetime.now().year,
-        embedder: str = DEFAULT_EMBEDDER,
-        device: str = DEFAULT_DEVICE,
-        threshold: float = DEFAULT_THRESHOLD,
-        gap: float = DEFAULT_GAP,
     ):
         """
         Initialize the Wiktextract processor.
 
         Args:
-            input_path (Path): Path to the Wiktextract JSONL file.
             minimum_year (int): Minimum year for filtering example sentences.
             maximum_year (int): Maximum year for filtering example sentences.
-            embedder (str): Embedder model name.
-            device (str): Device for embedding model.
-            threshold (float): Similarity threshold for associating translations.
-            gap (float): Similarity gap for associating translations.
         """
-        self._input_path: Path = input_path
-
         self._minimum_year: int = minimum_year
         self._maximum_year: int = maximum_year
-
-        self._embedder: SentenceTransformer = SentenceTransformer(
-            embedder,
-            device=device,
-        )
-
-        self._threshold: float = threshold
-        self._gap: float = gap
 
     def _extract_year(
         self,
@@ -91,7 +59,7 @@ class WiktextractProcessor(Processor):
     def _extract_sentences(
         self,
         raw_sentences: list[dict[str, Any]],
-    ) -> list[str]:
+    ) -> list[Sentence]:
         """
         Extract example sentences from Wiktextract examples.
 
@@ -99,69 +67,71 @@ class WiktextractProcessor(Processor):
             raw_sentences (list[dict[str, Any]]): List of raw example sentences.
 
         Returns:
-            list[str]: List of extracted example sentences.
+            list[Sentence]: List of extracted Sentence objects.
         """
-        sentences: list[str] = []
+        sentences: list[Sentence] = []
 
         for example in raw_sentences:
             text: str | None = example.get("text")
             if not text:
                 continue
 
-            reference: str | None = example.get("ref")
+            sentence: str = text.strip()
 
+            reference: str | None = example.get("ref")
             if reference:
                 year: int | None = self._extract_year(reference)
                 if year is None:
                     continue
 
                 if self._minimum_year <= year <= self._maximum_year:
-                    sentences.append(text.strip())
+                    sentences.append(
+                        Quotation(
+                            sentence=sentence,
+                            reference=reference.strip(),
+                        )
+                    )
             elif example.get("type", "") == "example":
-                sentences.append(text.strip())
+                sentences.append(Example(sentence=sentence))
 
         return sentences
 
     def _extract_senses(
         self,
         raw_senses: list[dict[str, Any]],
-        sense_index: int = 1,
-    ) -> tuple[int, list[Sense]]:
+    ) -> list[Sense]:
         """
         Extract senses from a Wiktextract entry.
 
         Args:
             raw_senses (list[dict[str, Any]]): List of raw senses.
-            sense_index (int): Starting index for senses.
 
         Returns:
-            tuple[int, list[Sense]]: Updated sense index and list of Sense objects.
+            list[Sense]: List of extracted Sense objects.
         """
         senses: list[Sense] = []
 
-        for sense in raw_senses:
+        for i, sense in enumerate(raw_senses, start=1):
             glosses: list[str] = sense.get("glosses", [])
 
             if glosses:
-                definition: str = glosses[0].strip()
+                definition: str = glosses[-1].strip()
 
                 if definition:
-                    sentences: list[str] = self._extract_sentences(
+                    sentences: list[Sentence] = self._extract_sentences(
                         sense.get("examples", []),
                     )
 
                     if sentences:
                         senses.append(
                             Sense(
-                                sense_order=sense_index,
+                                sense_order=i,
                                 definition=definition,
                                 sentences=sentences,
                             )
                         )
 
-            sense_index += 1
-
-        return sense_index - 1, senses
+        return senses
 
     def _extract_translations(
         self,
@@ -183,111 +153,51 @@ class WiktextractProcessor(Processor):
             if not sense:
                 continue
 
+            sense = sense.strip()
+
             word: str | None = translation.get("word")
             if not word:
                 continue
+
+            word = word.strip().lower()
 
             language: str | None = translation.get("lang")
             if not language:
                 continue
 
-            translations[sense.strip()].append(
-                Translation(
-                    translation=word.strip().lower(),
-                    language=language.strip().lower(),
+            language = language.strip().lower()
+
+            languages: set[str] = {
+                translation.language for translation in translations[sense]
+            }
+
+            if language not in languages:
+                translations[sense].append(
+                    Translation(
+                        translation=word,
+                        language=language,
+                    )
                 )
-            )
 
         return translations
 
-    def _associate_translations(
+    def extract_lemmas(
         self,
-        senses: list[Sense],
-        translations: dict[str, list[Translation]],
-    ) -> None:
+        input_path: Path,
+    ) -> Generator[dict[str, Any], None, None]:
         """
-        Associate translations with senses using semantic similarity.
+        Extract lemmas and their translations from the Wiktextract JSONL file.
 
         Args:
-            senses (list[Sense]): List of Sense objects.
-            translations (dict[str, list[Translation]]): Dictionary mapping sense definitions to lists of Translations.
-        """
-        if not senses or not translations:
-            return
-
-        sense_definitions: list[str] = [sense.definition for sense in senses]
-
-        sense_embeddings: torch.Tensor = self._embedder.encode(
-            sense_definitions,
-            convert_to_tensor=True,
-        )
-
-        translation_definitions: list[str] = list(translations.keys())
-
-        translation_embeddings = self._embedder.encode(
-            translation_definitions,
-            convert_to_tensor=True,
-        )
-
-        similarities: torch.Tensor = util.cos_sim(
-            translation_embeddings,
-            sense_embeddings,
-        )
-
-        candidates: list[tuple[float, int, str]] = []
-
-        for i, translation_definition in enumerate(translation_definitions):
-            scores: torch.Tensor = similarities[i]
-            if scores.numel() == 0:
-                continue
-
-            top_scores: torch.Tensor
-            top_indices: torch.Tensor
-
-            top_scores, top_indices = torch.topk(scores, k=min(2, scores.numel()))
-
-            best_index: int = int(top_indices[0])
-            best_score: float = float(top_scores[0])
-
-            if best_score < self._threshold:
-                continue
-
-            second_score: float = (
-                float(top_scores[1]) if top_scores.numel() > 1 else 0.0
-            )
-
-            if best_score - second_score < self._gap:
-                continue
-
-            candidates.append((best_score, best_index, translation_definition))
-
-        candidates.sort(key=lambda candidate: candidate[0], reverse=True)
-
-        associated_senses: torch.Tensor = torch.zeros(len(senses), dtype=torch.bool)
-
-        for best_score, best_index, translation_definition in candidates:
-            if associated_senses[best_index]:
-                continue
-
-            senses[best_index].translations.extend(translations[translation_definition])
-            associated_senses[best_index] = True
-
-    def process(
-        self,
-    ) -> Generator[Lemma, None, None]:
-        """
-        Process the Wiktextract JSONL file and yield Lemma objects.
+            input_path (Path): Path to the Wiktextract JSONL file.
 
         Returns:
-            Generator[Lemma, None, None]: Generator of Lemma objects.
+            Generator[dict[str, Any], None, None]: Generator yielding lemmas with their details.
         """
-        lemmas: dict[str, list[Sense]] = {}
-        lemma_indexes: dict[str, int] = {}
-
         with (
-            gzip.open(self._input_path, "rt", encoding="utf-8") as file,
+            gzip.open(input_path, "rt", encoding="utf-8") as file,
             tqdm(
-                desc="Processing",
+                desc="Extracting",
                 unit=" lines",
             ) as pbar,
         ):
@@ -295,32 +205,190 @@ class WiktextractProcessor(Processor):
                 entry: dict[str, Any] = json.loads(line)
 
                 language: str | None = entry.get("lang_code") or entry.get("lang")
-
                 if language and language.lower() in ("en", "english"):
                     lemma: str | None = entry.get("word")
-
                     if lemma:
-                        lemma = lemma.strip().lower()
+                        lemma = lemma.strip()
 
-                        lemma_indexes.setdefault(lemma, 0)
+                        etymology: str | None = entry.get("etymology_text")
+                        pos: str | None = entry.get("pos")
 
-                        senses: list[Sense]
-                        lemma_indexes[lemma], senses = self._extract_senses(
+                        senses: list[Sense] = self._extract_senses(
                             entry.get("senses", []),
-                            sense_index=lemma_indexes[lemma] + 1,
                         )
 
                         if senses:
-                            self._associate_translations(
-                                senses,
+                            translations: dict[str, list[Translation]] = (
                                 self._extract_translations(
                                     entry.get("translations", []),
-                                ),
+                                )
                             )
 
-                            lemmas.setdefault(lemma, []).extend(senses)
+                            yield {
+                                "lemma": lemma,
+                                "etymology": etymology,
+                                "pos": pos,
+                                "senses": senses,
+                                "translations": translations,
+                            }
 
                 pbar.update(1)
 
-        for lemma, senses in lemmas.items():
-            yield Lemma(lemma=lemma, senses=senses)
+    @staticmethod
+    def _safe_load(
+        string: str,
+    ) -> dict[str, Any]:
+        """
+        Safely load a JSON string, returning an empty dictionary if parsing fails.
+
+        Args:
+            string (str): The JSON string to parse.
+
+        Returns:
+            dict[str, Any]: The parsed JSON object, or an empty dictionary if parsing fails.
+        """
+        try:
+            return json.loads(string)
+        except json.JSONDecodeError:
+            return {}
+
+    def _build_mappings(
+        self,
+        mappings_path: Path,
+    ) -> dict[tuple[str, str, str], dict[str, str]]:
+        """
+        Build a mapping dictionary from the mappings JSONL file.
+
+        Args:
+            mappings_path (Path): Path to the mappings JSONL file.
+
+        Returns:
+            dict[tuple[str, str, str], dict[str, str]]: A dictionary mapping (lemma, etymology, pos) to a mapping of sense index to translation letter.
+        """
+        mappings: dict[tuple[str, str, str], dict[str, str]] = {}
+
+        with mappings_path.open(encoding="utf-8") as file:
+            for line in file:
+                entry = self._safe_load(line)
+                if not entry:
+                    continue
+
+                key: tuple[str, str, str] = (
+                    entry.get("lemma", ""),
+                    entry.get("etymology", ""),
+                    entry.get("pos", ""),
+                )
+
+                if key in mappings:
+                    mappings[key] = {}
+                    continue
+
+                raw_mapping: dict[str, str] | None = entry.get("mapping")
+                if isinstance(raw_mapping, dict):
+                    mappings.setdefault(key, raw_mapping)
+
+        return mappings
+
+    def associate_translations(
+        self,
+        input_path: Path,
+        mappings_path: Path,
+    ) -> Generator[dict[str, Any], None, None]:
+        """
+        Associate translations with senses based on the provided mappings.
+
+        Args:
+            input_path (Path): Path to the Wiktextract JSONL file.
+            mappings_path (Path): Path to the mappings JSONL file.
+
+        Returns:
+            Generator[dict[str, Any], None, None]: Generator yielding lemmas with associated translations.
+        """
+        mappings: dict[tuple[str, str, str], dict[str, str]] = self._build_mappings(
+            mappings_path,
+        )
+
+        with (
+            input_path.open(encoding="utf-8") as file,
+            tqdm(
+                desc="Associating",
+                unit=" lines",
+            ) as pbar,
+        ):
+            for line in file:
+                input_entry: dict[str, Any] = self._safe_load(line)
+                if not input_entry:
+                    pbar.update(1)
+                    continue
+
+                lemma: str = input_entry.get("lemma", "")
+                etymology: str = input_entry.get("etymology", "")
+                pos: str = input_entry.get("pos", "")
+
+                translations_map: dict[str, list[dict[str, str]]] = input_entry.get(
+                    "translations",
+                    {},
+                )
+
+                translations_keys: list[str] = [
+                    key for key in translations_map.keys() if isinstance(key, str)
+                ]
+
+                key: tuple[str, str, str] = (lemma, etymology, pos)
+                mapping: dict[str, str] = mappings.get(key, {}) if mappings else {}
+
+                senses: list[dict[str, Any]] = []
+
+                for i, sense in enumerate(input_entry.get("senses", []), start=1):
+                    translations: list[Translation] = []
+
+                    letter: str | None = (
+                        mapping.get(str(i)) if isinstance(mapping, dict) else None
+                    )
+
+                    raw_translations: list[dict[str, str]] | None = None
+                    if letter and len(letter) == 1 and letter.isalpha():
+                        index: int = ord(letter.upper()) - ord("A")
+                        if 0 <= index < len(translations_keys):
+                            raw_translations = translations_map.get(
+                                translations_keys[index]
+                            )
+
+                    if raw_translations:
+                        for raw_translation in raw_translations:
+                            if not isinstance(raw_translation, dict):
+                                continue
+
+                            translation: str | None = raw_translation.get(
+                                "translation",
+                            )
+
+                            language: str | None = raw_translation.get(
+                                "language",
+                            )
+
+                            if translation and language:
+                                translations.append(
+                                    Translation(
+                                        translation=translation,
+                                        language=language,
+                                    )
+                                )
+
+                    senses.append(
+                        {
+                            "sense_order": sense.get("sense_order"),
+                            "definition": sense.get("definition"),
+                            "sentences": sense.get("sentences"),
+                            "translations": translations,
+                        }
+                    )
+
+                yield {
+                    "lemma": lemma,
+                    "etymology": etymology,
+                    "pos": pos,
+                    "senses": senses,
+                }
+
+                pbar.update(1)

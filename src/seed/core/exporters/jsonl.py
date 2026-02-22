@@ -1,12 +1,11 @@
 import json
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import Generator
+from typing import Any, Iterable, Mapping
 
 from tqdm import tqdm
 
 from ...config import DEFAULT_BUFFER_SIZE
-from ...models import Lemma
 from .base import Exporter
 from .factory import ExporterFactory
 
@@ -17,16 +16,43 @@ class JsonlExporter(Exporter):
     Exporter for JSONL format.
     """
 
+    @classmethod
+    def _serialize(
+        cls,
+        object: Any,
+    ) -> Any:
+        """
+        Serialize an object to a JSON-serializable format.
+
+        Args:
+            object: The object to serialize.
+
+        Returns:
+            A JSON-serializable representation of the object.
+        """
+        match object:
+            case _ if is_dataclass(object) and not isinstance(object, type):
+                return {k: cls._serialize(v) for k, v in asdict(object).items()}
+
+            case list():
+                return [cls._serialize(item) for item in object]
+
+            case dict():
+                return {k: cls._serialize(v) for k, v in object.items()}
+
+            case _:
+                return object
+
     def export(
         self,
-        lemmas: Generator[Lemma, None, None],
+        data: Iterable[Mapping[str, Any] | object],
         buffer_size: int = DEFAULT_BUFFER_SIZE,
     ) -> Path:
         """
         Export lemmas to a JSONL file.
 
         Args:
-            lemmas (Generator[Lemma, None, None]): Generator of Lemma object.
+            data (Iterable[Mapping[str, Any] | object]): Data to be exported.
             buffer_size (int): Buffer size for file writing.
 
         Returns:
@@ -37,7 +63,7 @@ class JsonlExporter(Exporter):
             encoding="utf-8",
             buffering=buffer_size,
         ) as file:
-            for lemma in tqdm(lemmas, desc="Exporting", unit=" lemma"):
-                file.write(f"{json.dumps(asdict(lemma), ensure_ascii=False)}\n")
+            for item in tqdm(data, desc="Exporting", unit=" item"):
+                file.write(f"{json.dumps(self._serialize(item), ensure_ascii=False)}\n")
 
         return self._output_path

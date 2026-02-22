@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Generator
+from typing import Any, Iterable, Mapping
 
 from ...config import DEFAULT_BUFFER_SIZE
-from ...models import Lemma
 
 
 class Exporter(ABC):
@@ -27,14 +26,14 @@ class Exporter(ABC):
     @abstractmethod
     def export(
         self,
-        lemmas: Generator[Lemma, None, None],
+        data: Iterable[Mapping[str, Any] | object],
         buffer_size: int = DEFAULT_BUFFER_SIZE,
     ) -> Path:
         """
         Export lemmas to the specified output path.
 
         Args:
-            lemmas (Generator[Lemma, None, None]): Generator of Lemma object.
+            data (Iterable[Mapping[str, Any] | object]): Data to be exported.
             buffer_size (int): Buffer size for file writing.
 
         Returns:

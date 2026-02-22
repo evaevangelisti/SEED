@@ -20,8 +20,5 @@ build/
 # Python cache files
 __pycache__/
 
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
-
 # macOS system files
 .DS_Store
