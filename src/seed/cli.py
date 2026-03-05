@@ -1,5 +1,4 @@
 from datetime import datetime
-from pathlib import Path
 
 import typer
 
@@ -8,8 +7,6 @@ from .config import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_MAPPINGS_PATH,
     DEFAULT_TIMEOUT,
-    ROOT,
-    SEED_PATH,
 )
 
 app: typer.Typer = typer.Typer(add_completion=False)
@@ -37,18 +34,13 @@ def main(
         datetime.now().year,
         help="Maximum year",
     ),
+    allowed_pos_tags: list[str] | None = typer.Option(
+        None,
+        help="Allowed POS tags",
+    ),
     buffer_size: int = typer.Option(
         DEFAULT_BUFFER_SIZE,
         help="Buffer size in bytes",
-    ),
-    mappings_path: Path = typer.Option(
-        DEFAULT_MAPPINGS_PATH,
-        help="Mapping path",
-    ),
-    output_path: Path = typer.Option(
-        SEED_PATH,
-        show_default=SEED_PATH.relative_to(ROOT.parent).as_posix(),
-        help="Output directory",
     ),
 ) -> None:
     from .config import COMPRESSED_WIKTEXTRACT_PATH, WIKTEXTRACT_URL
@@ -70,12 +62,13 @@ def main(
     else:
         typer.echo(f"Wiktextract data already exists at {COMPRESSED_WIKTEXTRACT_PATH}")
 
-    from .config import WIKTEXTRACT_PATH
+    from .config import SEED_PATH, WIKTEXTRACT_PATH
     from .core import ExporterFactory, WiktextractProcessor
 
     processor: WiktextractProcessor = WiktextractProcessor(
         minimum_year=minimum_year,
         maximum_year=maximum_year,
+        allowed_pos_tags=set(allowed_pos_tags) if allowed_pos_tags else None,
     )
 
     if force or not WIKTEXTRACT_PATH.exists():
@@ -89,17 +82,17 @@ def main(
     else:
         typer.echo(f"Processed data already exists at {WIKTEXTRACT_PATH}")
 
-    if mappings_path.exists():
+    if DEFAULT_MAPPINGS_PATH.exists():
         exporter, _ = ExporterFactory.create(SEED_PATH)
         exporter.export(
-            processor.associate_translations(WIKTEXTRACT_PATH, mappings_path),
+            processor.associate_translations(WIKTEXTRACT_PATH, DEFAULT_MAPPINGS_PATH),
             buffer_size=buffer_size,
         )
 
         typer.echo(f"Saved SEED data to {SEED_PATH}")
     else:
         typer.echo(
-            f"Mappings file not found at {mappings_path}, skipping association of translations"
+            f"Mappings file not found at {DEFAULT_MAPPINGS_PATH}, skipping association of translations"
         )
 
 

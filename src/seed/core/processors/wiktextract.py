@@ -23,6 +23,7 @@ class WiktextractProcessor(Processor):
         self,
         minimum_year: int = datetime.now().year - 25,
         maximum_year: int = datetime.now().year,
+        allowed_pos_tags: set[str] | None = None,
     ):
         """
         Initialize the Wiktextract processor.
@@ -30,9 +31,12 @@ class WiktextractProcessor(Processor):
         Args:
             minimum_year (int): Minimum year for filtering example sentences.
             maximum_year (int): Maximum year for filtering example sentences.
+            allowed_pos_tags (set[str] | None): Set of allowed part-of-speech tags. If None, all POS tags are allowed.
         """
         self._minimum_year: int = minimum_year
         self._maximum_year: int = maximum_year
+
+        self.allowed_pos_tags: set[str] | None = allowed_pos_tags
 
     def _extract_year(
         self,
@@ -208,29 +212,26 @@ class WiktextractProcessor(Processor):
                 if language and language.lower() in ("en", "english"):
                     lemma: str | None = entry.get("word")
                     if lemma:
-                        lemma = lemma.strip()
-
-                        etymology: str | None = entry.get("etymology_text")
-                        pos: str | None = entry.get("pos")
-
-                        senses: list[Sense] = self._extract_senses(
-                            entry.get("senses", []),
-                        )
-
-                        if senses:
-                            translations: dict[str, list[Translation]] = (
-                                self._extract_translations(
-                                    entry.get("translations", []),
-                                )
+                        pos_tag: str | None = entry.get("pos")
+                        if self.allowed_pos_tags is None or pos_tag in self.allowed_pos_tags:
+                            senses: list[Sense] = self._extract_senses(
+                                entry.get("senses", []),
                             )
 
-                            yield {
-                                "lemma": lemma,
-                                "etymology": etymology,
-                                "pos": pos,
-                                "senses": senses,
-                                "translations": translations,
-                            }
+                            if senses:
+                                translations: dict[str, list[Translation]] = (
+                                    self._extract_translations(
+                                        entry.get("translations", []),
+                                    )
+                                )
+
+                                yield {
+                                    "lemma": lemma.strip(),
+                                    "etymology": entry.get("etymology_text"),
+                                    "pos": pos_tag,
+                                    "senses": senses,
+                                    "translations": translations,
+                                }
 
                 pbar.update(1)
 
