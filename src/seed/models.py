@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -8,6 +8,7 @@ class Sentence:
     """
 
     sentence: str
+    word_offsets: list[tuple[int, int]]
 
 
 @dataclass
@@ -29,16 +30,6 @@ class Quotation(Sentence):
 
 
 @dataclass
-class Translation:
-    """
-    A translation of a lemma in a particular sense.
-    """
-
-    translation: str
-    language: str
-
-
-@dataclass
 class Sense:
     """
     A particular sense of a lemma.
@@ -47,15 +38,3 @@ class Sense:
     sense_order: int
     definition: str
     sentences: list[Sentence]
-
-
-@dataclass
-class Lemma:
-    """
-    A lemma with its senses.
-    """
-
-    lemma: str
-    etymology: str | None = None
-    pos: str | None = None
-    senses: list[Sense] = field(default_factory=list)

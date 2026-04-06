@@ -9,6 +9,25 @@ from .config import (
     DEFAULT_TIMEOUT,
 )
 
+
+def parse_allowed_pos_tags(
+    allowed_pos_tags: str | None,
+) -> list[str] | None:
+    """
+    Parse a comma-separated string of POS tags into a list of strings. If the input is None, return None.
+
+    Args:
+        pos_tags (str | None): A comma-separated string of POS tags, or None.
+
+    Returns:
+        list[str] | None: A list of POS tags, or None if the input was None.
+    """
+    if allowed_pos_tags is None:
+        return None
+
+    return allowed_pos_tags.split()
+
+
 app: typer.Typer = typer.Typer(add_completion=False)
 
 
@@ -27,16 +46,25 @@ def main(
         help="Request timeout in seconds",
     ),
     minimum_year: int = typer.Option(
-        datetime.now().year - 25,
+        datetime.now().year - 100,
         help="Minimum year",
     ),
     maximum_year: int = typer.Option(
         datetime.now().year,
         help="Maximum year",
     ),
-    allowed_pos_tags: list[str] | None = typer.Option(
+    allowed_pos_tags: str | None = typer.Option(
         None,
         help="Allowed POS tags",
+        callback=parse_allowed_pos_tags,
+    ),
+    batch_size: int = typer.Option(
+        1000,
+        help="Batch size for processing data",
+    ),
+    n_process: int = typer.Option(
+        1,
+        help="Number of processes to use for processing data",
     ),
     buffer_size: int = typer.Option(
         DEFAULT_BUFFER_SIZE,
@@ -68,13 +96,19 @@ def main(
     processor: WiktextractProcessor = WiktextractProcessor(
         minimum_year=minimum_year,
         maximum_year=maximum_year,
-        allowed_pos_tags=set(allowed_pos_tags) if allowed_pos_tags is not None else None,
+        allowed_pos_tags=(
+            set(allowed_pos_tags) if allowed_pos_tags is not None else None
+        ),
     )
 
     if force or not WIKTEXTRACT_PATH.exists():
         exporter, _ = ExporterFactory.create(WIKTEXTRACT_PATH)
         exporter.export(
-            processor.extract_lemmas(WIKTEXTRACT_PATH),
+            processor.extract_lemmas(
+                COMPRESSED_WIKTEXTRACT_PATH,
+                batch_size=batch_size,
+                n_process=n_process,
+            ),
             buffer_size=buffer_size,
         )
 
