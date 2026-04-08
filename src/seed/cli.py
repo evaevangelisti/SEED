@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import typer
 
 from .config import (
@@ -45,12 +43,12 @@ def main(
         DEFAULT_TIMEOUT,
         help="Request timeout in seconds",
     ),
-    minimum_year: int = typer.Option(
-        datetime.now().year - 100,
+    minimum_year: int | None = typer.Option(
+        None,
         help="Minimum year",
     ),
-    maximum_year: int = typer.Option(
-        datetime.now().year,
+    maximum_year: int | None = typer.Option(
+        None,
         help="Maximum year",
     ),
     allowed_pos_tags: str | None = typer.Option(

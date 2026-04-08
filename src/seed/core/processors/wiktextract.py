@@ -3,7 +3,6 @@ import json
 import re
 import uuid
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Generator
 
@@ -25,20 +24,20 @@ class WiktextractProcessor(Processor):
 
     def __init__(
         self,
-        minimum_year: int = datetime.now().year - 100,
-        maximum_year: int = datetime.now().year,
+        minimum_year: int | None = None,
+        maximum_year: int | None = None,
         allowed_pos_tags: set[str] | None = None,
     ):
         """
         Initialize the Wiktextract processor.
 
         Args:
-            minimum_year (int): Minimum year for filtering example sentences.
-            maximum_year (int): Maximum year for filtering example sentences.
+            minimum_year (int | None): Minimum year for filtering example sentences. If None, no minimum year filter is applied.
+            maximum_year (int | None): Maximum year for filtering example sentences. If None, no maximum year filter is applied.
             allowed_pos_tags (set[str] | None): Set of allowed part-of-speech tags. If None, all POS tags are allowed.
         """
-        self._minimum_year: int = minimum_year
-        self._maximum_year: int = maximum_year
+        self._minimum_year: int | None = minimum_year
+        self._maximum_year: int | None = maximum_year
 
         self.allowed_pos_tags: set[str] | None = allowed_pos_tags
 
@@ -100,14 +99,19 @@ class WiktextractProcessor(Processor):
                 if year is None:
                     continue
 
-                if self._minimum_year <= year <= self._maximum_year:
-                    sentences.append(
-                        Quotation(
-                            sentence=sentence,
-                            word_offsets=bold_text_offsets,
-                            reference=reference.strip(),
-                        )
+                if self._minimum_year is not None and year < self._minimum_year:
+                    continue
+
+                if self._maximum_year is not None and year > self._maximum_year:
+                    continue
+
+                sentences.append(
+                    Quotation(
+                        sentence=sentence,
+                        word_offsets=bold_text_offsets,
+                        reference=reference.strip(),
                     )
+                )
             elif example.get("type", "") == "example":
                 sentences.append(
                     Example(
@@ -322,7 +326,9 @@ class WiktextractProcessor(Processor):
             for line in file:
                 lemma_entry: dict[str, Any] = json.loads(line)
 
-                language: str | None = lemma_entry.get("lang_code") or lemma_entry.get("lang")
+                language: str | None = lemma_entry.get("lang_code") or lemma_entry.get(
+                    "lang"
+                )
                 if language and language.lower() in ("en", "english"):
                     lemma: str | None = lemma_entry.get("word")
                     if lemma:
