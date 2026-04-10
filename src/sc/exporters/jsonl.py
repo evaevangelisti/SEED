@@ -5,7 +5,7 @@ from typing import Any, Iterable, Mapping
 
 from tqdm import tqdm
 
-from ...config import DEFAULT_BUFFER_SIZE
+from ..config import DEFAULT_BUFFER_SIZE
 from .base import Exporter
 from .factory import ExporterFactory
 

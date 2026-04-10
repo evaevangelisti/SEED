@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from ...config import DEFAULT_BUFFER_SIZE
+from ..config import DEFAULT_BUFFER_SIZE
 
 
 class Exporter(ABC):

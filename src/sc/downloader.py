@@ -3,7 +3,7 @@ from pathlib import Path
 import requests
 from tqdm import tqdm
 
-from ..config import DEFAULT_CHUNK_SIZE, DEFAULT_TIMEOUT
+from .config import DEFAULT_CHUNK_SIZE, DEFAULT_TIMEOUT
 
 
 class Downloader:

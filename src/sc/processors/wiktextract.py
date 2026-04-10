@@ -11,7 +11,7 @@ from spacy.language import Language
 from spacy.tokens import Doc, Span, Token
 from tqdm import tqdm
 
-from ...models import Example, Quotation, Sense, Sentence
+from ..models import Example, Quotation, Sense, Sentence
 from .base import Processor
 
 
