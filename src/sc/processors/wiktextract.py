@@ -42,7 +42,7 @@ class WiktextractProcessor(Processor):
 
         self._allowed_pos_tags: set[str] | None = allowed_pos_tags
 
-        self._nlp: Language = spacy.load("en_core_web_sm", disable=["parser", "ner"])
+        self._nlp: Language = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 
     def _extract_year(
         self,
@@ -149,14 +149,13 @@ class WiktextractProcessor(Processor):
                         sense.get("examples", []),
                     )
 
-                    if sentences:
-                        senses.append(
-                            Sense(
-                                sense_order=i,
-                                definition=definition,
-                                sentences=sentences,
-                            )
+                    senses.append(
+                        Sense(
+                            sense_order=i,
+                            definition=definition,
+                            sentences=sentences,
                         )
+                    )
 
         return senses
 
@@ -342,11 +341,11 @@ class WiktextractProcessor(Processor):
                                 lemma_entry.get("senses", []),
                             )
 
-                            if senses:
+                            if senses and any(sense.sentences for sense in senses):
                                 record_id: str = str(
                                     uuid.uuid5(
                                         uuid.NAMESPACE_DNS,
-                                        f"{lemma}|{pos_tag}|{'|'.join(sense.definition.lower() for sense in senses)}",
+                                        f"{lemma}|{pos_tag}|{'|'.join(sense.definition.lower() for sense in [sense for sense in senses if sense.sentences])}",
                                     )
                                 )
 
@@ -386,10 +385,12 @@ class WiktextractProcessor(Processor):
                 self._nlp.pipe(
                     (sentence.sentence for _, sentence in sentences),
                     batch_size=batch_size,
+                    n_process=4,
                 ),
                 self._nlp.pipe(
                     (lemma for lemma, _ in sentences),
                     batch_size=batch_size,
+                    n_process=4,
                 ),
                 sentences,
             ),
@@ -508,6 +509,9 @@ class WiktextractProcessor(Processor):
                 senses: list[dict[str, Any]] = []
 
                 for i, sense in enumerate(input_entry.get("senses", []), start=1):
+                    if not sense.get("sentences", []):
+                        continue
+
                     translations: dict[str, list[str]] = {}
 
                     mapped: str | None = mapping.get(f"F{i}")

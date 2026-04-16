@@ -37,9 +37,9 @@ def main(
         help="Allowed POS tags",
         callback=parse_allowed_pos_tags,
     ),
-    force: bool = typer.Option(
+    force_download: bool = typer.Option(
         False,
-        help="Force re-download and re-processing of data",
+        help="Force re-download",
     ),
 ) -> None:
     from .config import COMPRESSED_WIKTEXTRACT_PATH, WIKTEXTRACT_URL
@@ -50,11 +50,9 @@ def main(
         COMPRESSED_WIKTEXTRACT_PATH,
     )
 
-    downloaded: bool = downloader.download(
-        force_download=force,
-    )
+    if force_download or not COMPRESSED_WIKTEXTRACT_PATH.exists():
+        downloader.download()
 
-    if downloaded:
         typer.echo(f"Downloaded Wiktextract data to {COMPRESSED_WIKTEXTRACT_PATH}")
     else:
         typer.echo(f"Wiktextract data already exists at {COMPRESSED_WIKTEXTRACT_PATH}")
@@ -71,17 +69,14 @@ def main(
         ),
     )
 
-    if force or not WIKTEXTRACT_PATH.exists():
-        exporter, _ = ExporterFactory.create(WIKTEXTRACT_PATH)
-        exporter.export(
-            processor.extract_lemmas(
-                COMPRESSED_WIKTEXTRACT_PATH,
-            ),
-        )
+    exporter, _ = ExporterFactory.create(WIKTEXTRACT_PATH)
+    exporter.export(
+        processor.extract_lemmas(
+            COMPRESSED_WIKTEXTRACT_PATH,
+        ),
+    )
 
-        typer.echo(f"Saved processed data to {WIKTEXTRACT_PATH}")
-    else:
-        typer.echo(f"Processed data already exists at {WIKTEXTRACT_PATH}")
+    typer.echo(f"Saved processed data to {WIKTEXTRACT_PATH}")
 
     from .config import DEFAULT_MAPPINGS_PATH, WIKTIONARY_PATH
 
@@ -91,7 +86,7 @@ def main(
             processor.associate_translations(WIKTEXTRACT_PATH, DEFAULT_MAPPINGS_PATH),
         )
 
-        typer.echo(f"Saved SEED data to {WIKTIONARY_PATH}")
+        typer.echo(f"Saved Wiktionary data to {WIKTIONARY_PATH}")
     else:
         typer.echo(
             f"Mappings file not found at {DEFAULT_MAPPINGS_PATH}, skipping association of translations"

@@ -28,24 +28,16 @@ class Downloader:
 
     def download(
         self,
-        force_download: bool = False,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         timeout: int = DEFAULT_TIMEOUT,
-    ) -> bool:
+    ) -> None:
         """
         Downloads the file from the specified URL.
 
         Args:
-            force_download (bool): Whether to force re-download if the file already exists.
             chunk_size (int): Size of each chunk to download in bytes.
             timeout (int): Request timeout in seconds.
-
-        Returns:
-            bool: True if the file was downloaded, False if it already existed.
         """
-        if not force_download and self._output_path.exists():
-            return False
-
         self._output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with requests.get(self._url, timeout=timeout, stream=True) as response:
@@ -64,5 +56,3 @@ class Downloader:
                     if chunk:
                         file.write(chunk)
                         pbar.update(len(chunk))
-
-        return True
