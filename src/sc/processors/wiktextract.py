@@ -385,12 +385,10 @@ class WiktextractProcessor(Processor):
                 self._nlp.pipe(
                     (sentence.sentence for _, sentence in sentences),
                     batch_size=batch_size,
-                    n_process=4,
                 ),
                 self._nlp.pipe(
                     (lemma for lemma, _ in sentences),
                     batch_size=batch_size,
-                    n_process=4,
                 ),
                 sentences,
             ),
