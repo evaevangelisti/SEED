@@ -36,7 +36,11 @@ class WordNetProcessor(Processor):
         """
         records: dict[tuple[str, POS], list[WordNetSense]] = defaultdict(list)
 
-        for synset in tqdm(wn.all_synsets(), desc="Extracting", unit=" synset"):
+        for synset in tqdm(
+            wn.all_synsets(),
+            desc="Extracting lemmas from WordNet",
+            unit=" synset",
+        ):
             pos_tag: POS | None = POS.from_wordnet(synset.pos())
             if pos_tag is not None and (
                 self._allowed_pos_tags is None or pos_tag in self._allowed_pos_tags

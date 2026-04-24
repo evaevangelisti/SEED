@@ -20,8 +20,8 @@ RAW_DIR: Path = DATA_DIR / "raw"
 
 COMPRESSED_WIKTEXTRACT_PATH: Path = RAW_DIR / "wiktextract.jsonl.gz"
 
-TRANSLATION_MAPPINGS_PATH: Path = RAW_DIR / "translation_mappings.jsonl"
-WORDNET_DEFINITIONS_MAPPINGS_PATH: Path = RAW_DIR / "wordnet_definitions_mappings.jsonl"
+TRANSLATION_MAPPINGS_PATH: Path = RAW_DIR / "translation_mappings.json"
+WORDNET_SYNSET_IDS_MAPPINGS_PATH: Path = RAW_DIR / "wordnet_synset_ids_mappings.json"
 
 INTERIM_DIR: Path = DATA_DIR / "interim"
 

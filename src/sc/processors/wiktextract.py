@@ -271,7 +271,7 @@ class WiktextractProcessor(Processor):
         with (
             gzip.open(self._input_path, "rt", encoding="utf-8") as file,
             tqdm(
-                desc="Extracting",
+                desc="Extracting records from Wiktextract",
                 unit=" lines",
             ) as pbar,
         ):

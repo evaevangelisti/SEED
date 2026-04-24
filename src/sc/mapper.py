@@ -38,39 +38,6 @@ class Mapper:
         except json.JSONDecodeError:
             return {}
 
-    def _build_mappings(
-        self,
-        mappings_path: Path,
-    ) -> dict[str, dict[str, str]]:
-        """
-        Build a mapping dictionary from the mappings JSONL file.
-
-        Args:
-            mappings_path (Path): Path to the mappings JSONL file.
-
-        Returns:
-            dict[str, dict[str, str]]: A dictionary mapping lemma IDs to their corresponding sense-to-translation mappings.
-        """
-        mappings: dict[str, dict[str, str]] = {}
-
-        with mappings_path.open(encoding="utf-8") as file:
-            for line in file:
-                entry = self._safe_load(line)
-                if not entry:
-                    continue
-
-                entry_id: str = entry.get("id", "")
-
-                if entry_id in mappings:
-                    mappings[entry_id] = {}
-                    continue
-
-                raw_mapping: dict[str, str] | None = entry.get("mapping")
-                if isinstance(raw_mapping, dict):
-                    mappings.setdefault(entry_id, raw_mapping)
-
-        return mappings
-
     def associate_translations(
         self,
         mappings_path: Path,
@@ -86,27 +53,26 @@ class Mapper:
         """
         lemmas: list[dict[str, Any]] = []
 
-        mappings: dict[str, dict[str, str]] = self._build_mappings(
-            mappings_path,
-        )
+        with mappings_path.open(encoding="utf-8") as file:
+            mappings: dict[str, dict[str, str]] = json.load(file)
 
         with (
             self._input_path.open(encoding="utf-8") as file,
             tqdm(
-                desc="Associating",
+                desc="Associating translations",
                 unit=" lines",
             ) as pbar,
         ):
             for line in file:
-                lemma_entry: dict[str, Any] = self._safe_load(line)
-                if not lemma_entry:
+                lemma: dict[str, Any] = self._safe_load(line)
+                if not lemma:
                     pbar.update(1)
                     continue
 
-                lemma_id: str = lemma_entry.get("id", "")
+                lemma_id: str = lemma.get("id", "")
                 mapping: dict[str, str] = mappings.get(lemma_id, {}) if mappings else {}
 
-                translation_map: dict[str, dict[str, list[str]]] = lemma_entry.get(
+                translation_map: dict[str, dict[str, list[str]]] = lemma.get(
                     "translations",
                     {},
                 )
@@ -117,7 +83,7 @@ class Mapper:
 
                 senses: list[dict[str, Any]] = []
 
-                for i, sense in enumerate(lemma_entry.get("senses", []), start=1):
+                for i, sense in enumerate(lemma.get("senses", []), start=1):
                     translations: dict[str, list[str]] = {}
 
                     mapped: str | None = mapping.get(f"F{i}")
@@ -143,22 +109,69 @@ class Mapper:
                                 if word not in translations[language]:
                                     translations[language].append(word)
 
-                    sense_entry: dict[str, Any] = sense
-
                     if translations:
-                        sense_entry["translations"] = translations
+                        sense["translations"] = translations
 
-                    senses.append(sense_entry)
+                    senses.append(sense)
 
-                lemma_entry["senses"] = senses
-                lemmas.append(lemma_entry)
+                lemma["senses"] = senses
+                lemmas.append(lemma)
 
                 pbar.update(1)
 
         return lemmas
 
-    def associate_wordnet_definitions(
+    def associate_wordnet_synset_ids(
         self,
         mappings_path: Path,
     ) -> list[dict[str, Any]]:
-        raise NotImplementedError
+        """
+        Associate WordNet synset IDs with senses based on the provided mappings.
+
+        Args:
+            mappings_path (Path): Path to the mappings JSONL file.
+
+        Returns:
+            list[dict[str, Any]]: A list of lemma entries with associated WordNet synset IDs for each sense, based on the provided mappings.
+        """
+        lemmas: list[dict[str, Any]] = []
+
+        with mappings_path.open(encoding="utf-8") as file:
+            mappings: dict[str, list[str]] = json.load(file)
+
+        with (
+            self._input_path.open(encoding="utf-8") as file,
+            tqdm(
+                desc="Associating WordNet synset IDs",
+                unit=" lines",
+            ) as pbar,
+        ):
+            for line in file:
+                lemma: dict[str, Any] = self._safe_load(line)
+                if not lemma:
+                    pbar.update(1)
+                    continue
+
+                lemma_id: str = lemma.get("id", "")
+                wordnet_synset_ids: list[str] = (
+                    mappings.get(lemma_id, []) if mappings else []
+                )
+
+                senses: list[dict[str, Any]] = []
+
+                for i, sense in enumerate(lemma.get("senses", [])):
+                    wordnet_synset_id: str | None = (
+                        wordnet_synset_ids[i] if i < len(wordnet_synset_ids) else None
+                    )
+
+                    if wordnet_synset_id:
+                        sense["wordnet_synset_id"] = wordnet_synset_id
+
+                    senses.append(sense)
+
+                lemma["senses"] = senses
+                lemmas.append(lemma)
+
+                pbar.update(1)
+
+        return lemmas

@@ -119,15 +119,15 @@ def main(
             f"Mappings file not found at {TRANSLATION_MAPPINGS_PATH}, skipping association of translations"
         )
 
-    from .config import WORDNET_DEFINITIONS_MAPPINGS_PATH
+    from .config import WORDNET_SYNSET_IDS_MAPPINGS_PATH
 
-    if WORDNET_DEFINITIONS_MAPPINGS_PATH.exists():
-        lemmas = mapper.associate_wordnet_definitions(
-            WORDNET_DEFINITIONS_MAPPINGS_PATH,
+    if WORDNET_SYNSET_IDS_MAPPINGS_PATH.exists():
+        lemmas = mapper.associate_wordnet_synset_ids(
+            WORDNET_SYNSET_IDS_MAPPINGS_PATH,
         )
     else:
         typer.echo(
-            f"Mappings file not found at {WORDNET_DEFINITIONS_MAPPINGS_PATH}, skipping association of WordNet definitions"
+            f"Mappings file not found at {WORDNET_SYNSET_IDS_MAPPINGS_PATH}, skipping association of WordNet definitions"
         )
 
     if lemmas:
