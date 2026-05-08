@@ -1,7 +1,7 @@
-sc
-==
+wsc
+===
 
 .. toctree::
    :maxdepth: 4
 
-   sc
+   wsc

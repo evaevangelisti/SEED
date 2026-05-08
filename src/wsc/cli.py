@@ -1,6 +1,7 @@
-from typing import Any
+import json
 
 import typer
+from tqdm import tqdm
 
 from .models import POS
 
@@ -70,6 +71,10 @@ def main(
 
     from .config import WIKTEXTRACT_LEMMAS_PATH
     from .exporters import ExporterFactory
+    from .models import WiktionaryLemma
+
+    lemmas: list[WiktionaryLemma] = []
+
     from .processors import WiktextractProcessor
 
     wiktextract_processor: WiktextractProcessor = WiktextractProcessor(
@@ -79,36 +84,56 @@ def main(
         allowed_pos_tags=parsed_allowed_pos_tags,
     )
 
-    exporter, _ = ExporterFactory.create(WIKTEXTRACT_LEMMAS_PATH)
-    exporter.export(wiktextract_processor.extract_lemmas())
+    if not WIKTEXTRACT_LEMMAS_PATH.exists():
+        lemmas = wiktextract_processor.extract_lemmas()
 
-    typer.echo(f"Saved Wiktextract lemmas to {WIKTEXTRACT_LEMMAS_PATH}")
+        exporter, _ = ExporterFactory.create(WIKTEXTRACT_LEMMAS_PATH)
+        exporter.export(lemmas)
+
+        typer.echo(f"Saved Wiktextract lemmas to {WIKTEXTRACT_LEMMAS_PATH}")
+    else:
+        typer.echo(
+            f"Wiktextract lemmas already exist at {WIKTEXTRACT_LEMMAS_PATH}, loading lemmas from file"
+        )
+
+        with WIKTEXTRACT_LEMMAS_PATH.open(encoding="utf-8") as file:
+            for line in tqdm(file, desc="Loading Wiktextract lemmas", unit=" line"):
+                lemmas.append(WiktionaryLemma.from_dict(json.loads(line)))
 
     from .config import WIKTEXTRACT_TRANSLATIONS_PATH
 
-    exporter, _ = ExporterFactory.create(WIKTEXTRACT_TRANSLATIONS_PATH)
-    exporter.export(wiktextract_processor.extract_translations())
+    if not WIKTEXTRACT_TRANSLATIONS_PATH.exists():
+        exporter, _ = ExporterFactory.create(WIKTEXTRACT_TRANSLATIONS_PATH)
+        exporter.export(wiktextract_processor.extract_translations())
 
-    typer.echo(f"Saved Wiktextract translations to {WIKTEXTRACT_TRANSLATIONS_PATH}")
+        typer.echo(f"Saved Wiktextract translations to {WIKTEXTRACT_TRANSLATIONS_PATH}")
+    else:
+        typer.echo(
+            f"Wiktextract translations already exist at {WIKTEXTRACT_TRANSLATIONS_PATH}, skipping extraction of translations"
+        )
 
     from .config import WORDNET_PATH
-    from .processors import WordNetProcessor
 
-    wordnet_processor: WordNetProcessor = WordNetProcessor(
-        allowed_pos_tags=parsed_allowed_pos_tags,
-    )
+    if not WORDNET_PATH.exists():
+        from .processors import WordNetProcessor
 
-    exporter, _ = ExporterFactory.create(WORDNET_PATH)
-    exporter.export(wordnet_processor.extract_lemmas())
+        wordnet_processor: WordNetProcessor = WordNetProcessor(
+            allowed_pos_tags=parsed_allowed_pos_tags,
+        )
 
-    typer.echo(f"Saved WordNet lemmas to {WORDNET_PATH}")
+        exporter, _ = ExporterFactory.create(WORDNET_PATH)
+        exporter.export(wordnet_processor.extract_lemmas())
+
+        typer.echo(f"Saved WordNet lemmas to {WORDNET_PATH}")
+    else:
+        typer.echo(
+            f"WordNet lemmas already exist at {WORDNET_PATH}, skipping extraction of WordNet lemmas"
+        )
 
     from .config import TRANSLATION_MAPPINGS_PATH, WIKTIONARY_PATH
     from .mapper import Mapper
 
-    mapper: Mapper = Mapper(WIKTEXTRACT_LEMMAS_PATH)
-
-    lemmas: list[dict[str, Any]] = []
+    mapper: Mapper = Mapper(lemmas)
 
     if TRANSLATION_MAPPINGS_PATH.exists():
         lemmas = mapper.associate_translations(
@@ -127,12 +152,12 @@ def main(
         )
     else:
         typer.echo(
-            f"Mappings file not found at {WORDNET_SYNSET_IDS_MAPPINGS_PATH}, skipping association of WordNet definitions"
+            f"Mappings file not found at {WORDNET_SYNSET_IDS_MAPPINGS_PATH}, skipping association of WordNet synset IDs"
         )
 
     if lemmas:
         exporter, _ = ExporterFactory.create(WIKTIONARY_PATH)
-        exporter.export((lemma for lemma in lemmas if lemma["sense"]["sentences"]))
+        exporter.export(lemmas)
 
         typer.echo(f"Saved Wiktionary data to {WIKTIONARY_PATH}")
 

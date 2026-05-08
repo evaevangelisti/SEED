@@ -10,6 +10,10 @@ DEFAULT_N_PROCESS: int = 4
 
 DEFAULT_BUFFER_SIZE: int = 1024 * 1024
 
+# External Resources
+
+NLTK_RESOURCES: list[str] = ["wordnet", "omw-1.4"]
+
 # Paths
 
 ROOT: Path = Path(__file__).resolve().parent.parent.parent

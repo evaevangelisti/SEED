@@ -1,10 +1,10 @@
 from collections import defaultdict
-from typing import Any
 
 from nltk.corpus import wordnet as wn
 from tqdm import tqdm
 
-from ..models import POS, WordNetSense
+from ..config import NLTK_RESOURCES
+from ..models import POS, WordNetLemma, WordNetSense
 from .base import Processor
 
 
@@ -25,19 +25,32 @@ class WordNetProcessor(Processor):
         """
         self._allowed_pos_tags: set[POS] | None = allowed_pos_tags
 
+    @staticmethod
+    def _ensure_resources() -> None:
+        """
+        Ensure that the necessary NLTK resources for WordNet are available. If not, download them.
+        """
+        import nltk
+
+        for resource in NLTK_RESOURCES:
+            try:
+                nltk.data.find(f"corpora/{resource}")
+            except LookupError:
+                nltk.download(resource, quiet=True)
+
     def extract_lemmas(
         self,
-    ) -> list[dict[str, Any]]:
+    ) -> list[WordNetLemma]:
         """
         Extract lemmas, their parts of speech, and their senses from WordNet.
 
         Returns:
-            list[dict[str, Any]]: A list of dictionaries, each containing a lemma, its part of speech, and a list of its senses (definitions and synonyms).
+            list[WordNetLemma]: A list of WordNetLemma instances, each containing the lemma, its part of speech, and its senses.
         """
         records: dict[tuple[str, POS], list[WordNetSense]] = defaultdict(list)
 
         for synset in tqdm(
-            wn.all_synsets(),
+            list(wn.all_synsets()),
             desc="Extracting lemmas from WordNet",
             unit=" synset",
         ):
@@ -75,11 +88,11 @@ class WordNetProcessor(Processor):
                         )
 
         return [
-            {
-                "lemma": lemma,
-                "pos": pos_tag.value,
-                "senses": senses,
-            }
+            WordNetLemma(
+                lemma=lemma,
+                pos=pos_tag,
+                senses=senses,
+            )
             for (lemma, pos_tag), senses in records.items()
             if senses
         ]

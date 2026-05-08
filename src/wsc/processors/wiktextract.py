@@ -8,11 +8,11 @@ from typing import Any
 
 import spacy
 from spacy.language import Language
-from spacy.tokens import Doc, Span, Token
+from spacy.tokens import Doc, Token
 from tqdm import tqdm
 
 from ..config import DEFAULT_BATCH_SIZE, DEFAULT_N_PROCESS
-from ..models import POS, Example, Quotation, Sentence, WiktionarySense
+from ..models import POS, Example, Quotation, Sentence, WiktionaryLemma, WiktionarySense
 from .base import Processor
 
 
@@ -142,26 +142,38 @@ class WiktextractProcessor(Processor):
         Returns:
             list[Sense]: List of extracted Sense objects.
         """
-        senses: list[WiktionarySense] = []
+        processed_senses = []
 
-        for i, sense in enumerate(raw_senses, start=1):
-            glosses: list[str] = sense.get("glosses", [])
+        for raw_sense in raw_senses:
+            glosses: list[str] = [
+                gloss.strip()
+                for gloss in raw_sense.get("raw_glosses")
+                or raw_sense.get("glosses")
+                or []
+                if gloss.strip()
+            ]
 
             if glosses:
-                definition: str = glosses[-1].strip()
+                processed_senses.append((raw_sense, glosses))
 
-                if definition:
-                    sentences: list[Sentence] = self._extract_sentences(
-                        sense.get("examples", []),
-                    )
+        senses: list[WiktionarySense] = []
 
-                    senses.append(
-                        WiktionarySense(
-                            sense_order=i,
-                            definition=definition,
-                            sentences=sentences,
-                        )
-                    )
+        for i, (raw_sense, current_glosses) in enumerate(processed_senses):
+            if any(
+                other_glosses[: len(current_glosses)] == current_glosses
+                and len(other_glosses) > len(current_glosses)
+                for j, (_, other_glosses) in enumerate(processed_senses)
+                if i != j
+            ):
+                continue
+
+            senses.append(
+                WiktionarySense(
+                    definition=current_glosses[-1],
+                    sentences=self._extract_sentences(raw_sense.get("examples", [])),
+                    parent_glosses=current_glosses[:-1] or None,
+                )
+            )
 
         return senses
 
@@ -283,8 +295,10 @@ class WiktextractProcessor(Processor):
                 ) or lemma_entry.get(
                     "lang",
                 )
+
                 if language and language.lower() in ("en", "english"):
                     lemma: str | None = lemma_entry.get("word")
+
                     if lemma:
                         lemma = lemma.strip()
 
@@ -294,6 +308,7 @@ class WiktextractProcessor(Processor):
                                 "",
                             ),
                         )
+
                         if pos_tag is not None and (
                             self._allowed_pos_tags is None
                             or pos_tag in self._allowed_pos_tags
@@ -304,11 +319,12 @@ class WiktextractProcessor(Processor):
                                     [],
                                 ),
                             )
-                            if senses and any(sense.sentences for sense in senses):
+
+                            if senses:
                                 record_id: str = str(
                                     uuid.uuid5(
                                         uuid.NAMESPACE_DNS,
-                                        f"{lemma}|{pos_tag}|{'|'.join(sense.definition.lower() for sense in [sense for sense in senses if sense.sentences])}",
+                                        f"{lemma}|{pos_tag.value}|{'|'.join(sense.definition.lower() for sense in senses)}",
                                     )
                                 )
 
@@ -320,7 +336,7 @@ class WiktextractProcessor(Processor):
 
                                 record: dict[str, Any] = {
                                     "lemma": lemma,
-                                    "pos": pos_tag.value,
+                                    "pos": pos_tag,
                                     "senses": senses,
                                     "translations": translations,
                                 }
@@ -337,8 +353,8 @@ class WiktextractProcessor(Processor):
 
         return self._records
 
+    @staticmethod
     def _find_word_offsets(
-        self,
         sentence_doc: Doc,
         lemma_doc: Doc,
         bold_text_offsets: list[tuple[int, int]],
@@ -356,17 +372,32 @@ class WiktextractProcessor(Processor):
         """
         word_offsets: list[tuple[int, int]] = []
 
-        lemma_texts: list[str] = [token.text.lower() for token in lemma_doc]
-        lemma_lemmas: list[str] = [token.lemma_.lower() for token in lemma_doc]
+        lemma_texts: list[str] = [
+            token.text.lower() for token in lemma_doc if token.text != "-"
+        ]
 
-        for i in range(len(sentence_doc) - len(lemma_doc) + 1):
-            window: Span = sentence_doc[i : i + len(lemma_doc)]
+        lemma_lemmas: list[str] = [
+            token.lemma_.lower() for token in lemma_doc if token.lemma_ != "-"
+        ]
 
-            if [token.text.lower() for token in window] == lemma_texts or [
-                token.lemma_.lower() for token in window
+        for i in range(len(sentence_doc)):
+            collected_tokens: list[Token] = []
+            j: int = i
+
+            while j < len(sentence_doc) and len(collected_tokens) < len(lemma_texts):
+                if sentence_doc[j].text != "-":
+                    collected_tokens.append(sentence_doc[j])
+
+                j += 1
+
+            if len(collected_tokens) < len(lemma_texts):
+                break
+
+            if [token.text.lower() for token in collected_tokens] == lemma_texts or [
+                token.lemma_.lower() for token in collected_tokens
             ] == lemma_lemmas:
-                start: int = window[0].idx
-                end: int = window[-1].idx + len(window[-1].text)
+                start: int = sentence_doc[i].idx
+                end: int = sentence_doc[j - 1].idx + len(sentence_doc[j - 1].text)
 
                 if (start, end) not in word_offsets:
                     word_offsets.append((start, end))
@@ -378,8 +409,10 @@ class WiktextractProcessor(Processor):
                 if token.idx >= start and token.idx + len(token.text) <= end
             ]
 
-            if [token.text.lower() for token in tokens] == lemma_texts or [
-                token.lemma_.lower() for token in tokens
+            if [
+                token.text.lower() for token in tokens if token.text != "-"
+            ] == lemma_texts or [
+                token.lemma_.lower() for token in tokens if token.lemma_ != "-"
             ] == lemma_lemmas:
                 if (start, end) not in word_offsets:
                     word_offsets.append((start, end))
@@ -390,7 +423,7 @@ class WiktextractProcessor(Processor):
         self,
         batch_size: int = DEFAULT_BATCH_SIZE,
         n_process: int = DEFAULT_N_PROCESS,
-    ) -> list[dict[str, Any]]:
+    ) -> list[WiktionaryLemma]:
         """
         Extract lemmas, their parts of speech, senses, and translations from the Wiktextract JSONL file, and find offsets of the lemma in the example sentences.
 
@@ -399,23 +432,22 @@ class WiktextractProcessor(Processor):
             n_process (int): The number of processes to use for parallel processing with spaCy. Defaults to DEFAULT_N_PROCESS.
 
         Returns:
-            list[dict[str, Any]]: A list of dictionaries, each containing a lemma, its part of speech, a list of its senses (definitions and sentences).
+            list[WiktionaryLemma]: A list of WiktionaryLemma objects, each containing a lemma, its part of speech, senses with example sentences, and translations.
         """
-        lemmas: list[dict[str, Any]] = [
-            {
-                "id": record_id,
-                "lemma": record["lemma"],
-                "pos": record["pos"],
-                "senses": record["senses"],
-            }
+        lemmas: list[WiktionaryLemma] = [
+            WiktionaryLemma(
+                id=record_id,
+                lemma=record["lemma"],
+                pos=record["pos"],
+                senses=record["senses"],
+            )
             for record_id, record in self._extract_records().items()
-            if any(sense.sentences for sense in record["senses"])
         ]
 
         sentences: list[Sentence] = [
             sentence
             for lemma in lemmas
-            for sense in lemma["senses"]
+            for sense in lemma.senses
             for sentence in sense.sentences
         ]
 
@@ -424,9 +456,9 @@ class WiktextractProcessor(Processor):
                 self._nlp.pipe(
                     [sentence.sentence for sentence in sentences]
                     + [
-                        lemma["lemma"].lower()
+                        lemma.lemma.lower()
                         for lemma in lemmas
-                        for sense in lemma["senses"]
+                        for sense in lemma.senses
                         for _ in sense.sentences
                     ],
                     batch_size=batch_size,
@@ -442,7 +474,7 @@ class WiktextractProcessor(Processor):
             zip(docs[: len(sentences)], docs[len(sentences) :], sentences),
             desc="Finding word offsets",
             total=len(sentences),
-            unit=" lemma",
+            unit=" sentence",
         ):
             sentence.word_offsets = self._find_word_offsets(
                 sentence_doc,
@@ -466,5 +498,9 @@ class WiktextractProcessor(Processor):
                 "id": record_id,
                 "translations": record["translations"],
             }
-            for record_id, record in self._extract_records().items()
+            for record_id, record in tqdm(
+                self._extract_records().items(),
+                desc="Extracting translations from Wiktextract",
+                unit=" record",
+            )
         ]

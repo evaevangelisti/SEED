@@ -1,6 +1,6 @@
-# SC
+# WSC
 
-**Sentence Collector** — A toolkit for collecting sentences from lexical resources (currently only Wiktionary).
+**Wiktionary Sentence Collector** — A toolkit for collecting sentences from Wiktionary.
 
 ## Installation
 
@@ -25,5 +25,5 @@ pip install -e ".[dev]"
 Run the pipeline with the following command:
 
 ```bash
-sc [options]
+wsc [options]
 ```

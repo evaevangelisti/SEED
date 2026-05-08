@@ -32,13 +32,22 @@ class JsonlExporter(Exporter):
         """
         match object:
             case _ if is_dataclass(object) and not isinstance(object, type):
-                return {k: cls._serialize(v) for k, v in asdict(object).items()}
+                return {
+                    k: cls._serialize(v)
+                    for k, v in asdict(object).items()
+                    if v is not None
+                }
 
             case list():
                 return [cls._serialize(item) for item in object]
 
             case dict():
-                return {k: cls._serialize(v) for k, v in object.items()}
+                return {
+                    k: cls._serialize(v) for k, v in object.items() if v is not None
+                }
+
+            case _ if hasattr(object, "value"):
+                return object.value
 
             case _:
                 return object

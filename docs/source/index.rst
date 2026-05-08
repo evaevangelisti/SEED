@@ -1,12 +1,12 @@
-.. SC documentation master file, created by
+.. WSC documentation master file, created by
    sphinx-quickstart on Fri Apr 10 18:38:51 2026.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-SC documentation
+WSC documentation
 ================
 
-Sentence Collector
+Wiktionary Sentence Collector
 
 
 .. toctree::
