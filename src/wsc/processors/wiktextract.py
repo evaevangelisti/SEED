@@ -373,11 +373,13 @@ class WiktextractProcessor(Processor):
         word_offsets: list[tuple[int, int]] = []
 
         lemma_texts: list[str] = [
-            token.text.lower() for token in lemma_doc if token.text != "-"
+            token.text.lower() for token in lemma_doc if token.text not in (" ", "-")
         ]
 
         lemma_lemmas: list[str] = [
-            token.lemma_.lower() for token in lemma_doc if token.lemma_ != "-"
+            token.lemma_.lower()
+            for token in lemma_doc
+            if token.lemma_ not in (" ", "-")
         ]
 
         for i in range(len(sentence_doc)):
@@ -385,7 +387,7 @@ class WiktextractProcessor(Processor):
             j: int = i
 
             while j < len(sentence_doc) and len(collected_tokens) < len(lemma_texts):
-                if sentence_doc[j].text != "-":
+                if sentence_doc[j].text not in (" ", "-"):
                     collected_tokens.append(sentence_doc[j])
 
                 j += 1
@@ -401,6 +403,14 @@ class WiktextractProcessor(Processor):
 
                 if (start, end) not in word_offsets:
                     word_offsets.append((start, end))
+            elif sentence_doc[i].text.lower() == "".join(lemma_texts) or sentence_doc[
+                i
+            ].lemma_.lower() == "".join(lemma_lemmas):
+                start: int = sentence_doc[i].idx
+                end: int = sentence_doc[i].idx + len(sentence_doc[i].text)
+
+                if (start, end) not in word_offsets:
+                    word_offsets.append((start, end))
 
         for start, end in bold_text_offsets:
             tokens: list[Token] = [
@@ -409,11 +419,28 @@ class WiktextractProcessor(Processor):
                 if token.idx >= start and token.idx + len(token.text) <= end
             ]
 
-            if [
-                token.text.lower() for token in tokens if token.text != "-"
-            ] == lemma_texts or [
-                token.lemma_.lower() for token in tokens if token.lemma_ != "-"
-            ] == lemma_lemmas:
+            filtered_texts: list[str] = [
+                token.text.lower() for token in tokens if token.text not in (" ", "-")
+            ]
+
+            filtered_lemmas: list[str] = [
+                token.lemma_.lower()
+                for token in tokens
+                if token.lemma_ not in (" ", "-")
+            ]
+
+            if (
+                filtered_texts == lemma_texts
+                or filtered_lemmas == lemma_lemmas
+                or (
+                    len(filtered_texts) == 1
+                    and filtered_texts[0] == "".join(lemma_texts)
+                )
+                or (
+                    len(filtered_lemmas) == 1
+                    and filtered_lemmas[0] == "".join(lemma_lemmas)
+                )
+            ):
                 if (start, end) not in word_offsets:
                     word_offsets.append((start, end))
 
