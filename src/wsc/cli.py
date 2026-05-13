@@ -65,9 +65,9 @@ def main(
     if force_download or not COMPRESSED_WIKTEXTRACT_PATH.exists():
         downloader.download()
 
-        typer.echo(f"Downloaded Wiktextract data to {COMPRESSED_WIKTEXTRACT_PATH}")
+        typer.echo("Downloaded Wiktextract data")
     else:
-        typer.echo(f"Wiktextract data already exists at {COMPRESSED_WIKTEXTRACT_PATH}")
+        typer.echo("Wiktextract data already exists")
 
     from .config import WIKTEXTRACT_LEMMAS_PATH
     from .exporters import ExporterFactory
@@ -90,11 +90,9 @@ def main(
         exporter, _ = ExporterFactory.create(WIKTEXTRACT_LEMMAS_PATH)
         exporter.export(lemmas)
 
-        typer.echo(f"Saved Wiktextract lemmas to {WIKTEXTRACT_LEMMAS_PATH}")
+        typer.echo("Saved Wiktextract lemmas")
     else:
-        typer.echo(
-            f"Wiktextract lemmas already exist at {WIKTEXTRACT_LEMMAS_PATH}, loading lemmas from file"
-        )
+        typer.echo("Wiktextract lemmas already exist")
 
         with WIKTEXTRACT_LEMMAS_PATH.open(encoding="utf-8") as file:
             for line in tqdm(file, desc="Loading Wiktextract lemmas", unit=" line"):
@@ -106,11 +104,9 @@ def main(
         exporter, _ = ExporterFactory.create(WIKTEXTRACT_TRANSLATIONS_PATH)
         exporter.export(wiktextract_processor.extract_translations())
 
-        typer.echo(f"Saved Wiktextract translations to {WIKTEXTRACT_TRANSLATIONS_PATH}")
+        typer.echo("Saved Wiktextract translations")
     else:
-        typer.echo(
-            f"Wiktextract translations already exist at {WIKTEXTRACT_TRANSLATIONS_PATH}, skipping extraction of translations"
-        )
+        typer.echo("Wiktextract translations already exist")
 
     from .config import WORDNET_PATH
 
@@ -124,11 +120,9 @@ def main(
         exporter, _ = ExporterFactory.create(WORDNET_PATH)
         exporter.export(wordnet_processor.extract_lemmas())
 
-        typer.echo(f"Saved WordNet lemmas to {WORDNET_PATH}")
+        typer.echo("Saved WordNet lemmas")
     else:
-        typer.echo(
-            f"WordNet lemmas already exist at {WORDNET_PATH}, skipping extraction of WordNet lemmas"
-        )
+        typer.echo("WordNet lemmas already exist")
 
     from .config import TRANSLATION_MAPPINGS_PATH, WIKTIONARY_PATH
     from .mapper import Mapper
@@ -140,9 +134,7 @@ def main(
             TRANSLATION_MAPPINGS_PATH,
         )
     else:
-        typer.echo(
-            f"Mappings file not found at {TRANSLATION_MAPPINGS_PATH}, skipping association of translations"
-        )
+        typer.echo("Mappings file not found, skipping association of translations")
 
     from .config import WORDNET_SYNSET_IDS_MAPPINGS_PATH
 
@@ -152,14 +144,14 @@ def main(
         )
     else:
         typer.echo(
-            f"Mappings file not found at {WORDNET_SYNSET_IDS_MAPPINGS_PATH}, skipping association of WordNet synset IDs"
+            "Mappings file not found, skipping association of WordNet synset IDs"
         )
 
     if lemmas:
         exporter, _ = ExporterFactory.create(WIKTIONARY_PATH)
         exporter.export(lemmas)
 
-        typer.echo(f"Saved Wiktionary data to {WIKTIONARY_PATH}")
+        typer.echo("Saved Wiktionary data")
 
 
 if __name__ == "__main__":
